@@ -351,6 +351,7 @@ class RunnerBase:
         query_id = [q.id for q in query_samples]
         if len(query_samples) < self.max_batchsize:
             feed = self.ds.make_batch(self.model, idx)
+            print('feed2',feed)
             self.run_one_item((query_id, idx, feed))
         else:
             bs = self.max_batchsize
@@ -679,6 +680,10 @@ class DataSet:
 
     def get(self, idx):
         return self.samples[idx]
+    
+    def accuracy(self,output_dir: str):
+        raise NotImplementedError
+        
 
 
 class SquadDataSet(DataSet):
@@ -721,6 +726,8 @@ class SquadDataSet(DataSet):
             for i, idx in enumerate(sample_ids):
                 self.samples[idx] = {key: np.expand_dims(tokens[key][i], axis=0) for key in keys}
 
+    def accuracy(self,output_dir: str):
+        print('output_acc',output_dir)
 
 class WikiTextDataSet(DataSet):
     def __init__(self, backend, dataset_name, tokenizer, task, count):
@@ -945,6 +952,7 @@ def main():
     time_taken = time.time() - start_time
 
     if args.accuracy:
+        breakpoint()
         acc_result = ds.accuracy(output_dir)
     else:
         acc_result = None

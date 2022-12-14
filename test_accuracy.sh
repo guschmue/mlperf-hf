@@ -1,1 +1,1 @@
-python hf.py --model bert-base-uncased --task questionanswering --dataset squad --scenario SingleStream --accuracy --name testing1
+python hf.py --model bert-base-uncased --task questionanswering --dataset squad --scenario SingleStream --name testing1 --accuracy --count 10
