@@ -310,6 +310,7 @@ class RunnerBase:
     def __init__(self, model, ds, threads, post_proc=None, max_batchsize=128):
         self.ds = ds
         self.model = model
+        self.take_accuracy = False
         self.post_process = post_proc
         self.threads = threads
         self.max_batchsize = max_batchsize
@@ -324,10 +325,19 @@ class RunnerBase:
     def run_one_item(self, qitem):
         # run the prediction
         processed_results = []
-        query_id, content_id, feed = qitem
+        query_id, content_id, feed = qitem 
+        print('query_id',query_id)
+        print('content_id',content_id )
         try:
             results = self.model.predict(feed)
+            print('results',results)
+            print('wwww',results)
+            print('start_logits', results.start_logits)
+            print('end_logits', results.end_logits)
             processed_results = self.post_process(results, content_id)
+            print('processed_results',processed_results)
+            print('post_process',self.post_process)
+            
         except Exception as ex:  # pylint: disable=broad-except
             # src = [self.ds.get_item_loc(i) for i in content_id]
             src = ""
@@ -341,15 +351,22 @@ class RunnerBase:
             response = []
             for idx, qid in enumerate(query_id):
                 response_array = array.array("B", np.array(processed_results[idx], np.float32).tobytes())
+                print('response_array',response_array)
                 response_array_refs.append(response_array)
+                print('response_array_refs',response_array_refs)
                 bi = response_array.buffer_info()
+                print('byte',bi)
+                print('byte0',bi[0])
+                print('byte1',bi[1])
                 response.append(lg.QuerySampleResponse(qid, bi[0], bi[1]))
+                print('response',response)
             lg.QuerySamplesComplete(response)
 
     def enqueue(self, query_samples):
         idx = [q.index for q in query_samples]
         query_id = [q.id for q in query_samples]
         if len(query_samples) < self.max_batchsize:
+            print('length of query_samples',len(query_samples))
             feed = self.ds.make_batch(self.model, idx)
             print('feed2',feed)
             self.run_one_item((query_id, idx, feed))
@@ -727,6 +744,7 @@ class SquadDataSet(DataSet):
                 self.samples[idx] = {key: np.expand_dims(tokens[key][i], axis=0) for key in keys}
 
     def accuracy(self,output_dir: str):
+        #TODO:Implement Accuracy
         print('output_acc',output_dir)
 
 class WikiTextDataSet(DataSet):
@@ -944,7 +962,8 @@ def main():
     log.info("starting {}".format(scenario))
 
     start_time = time.time()
-    runner.start_run(args.accuracy)
+    accuracy_runner = runner.start_run(args.accuracy)
+    print('accuracy_runner',accuracy_runner)
     lg.StartTestWithLogSettings(sut, qsl, settings, log_settings)
     runner.finish()
     lg.DestroyQSL(qsl)
