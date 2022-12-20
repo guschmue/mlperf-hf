@@ -112,6 +112,15 @@ def get_args():
     return args
 
 
+
+# #dummy implementation of post process, nothing useful is returning
+# def post_proces(self,query_ids,results):
+#     response = []
+#     for res, q_id in zip(results,query_ids):
+#         response.append(lg.QuerySampleResponse(q_id,0,0))
+    
+#     lg.QuerySamplesComplete(response)
+
 class PostProcessNone:
     def __init__(self, offset=0):
         self.offset = offset
@@ -121,6 +130,9 @@ class PostProcessNone:
         for idx in ids:
             processed_results.append([0])
         return processed_results
+
+
+
 
 
 class Backend():
@@ -326,18 +338,19 @@ class RunnerBase:
         # run the prediction
         processed_results = []
         query_id, content_id, feed = qitem 
-        print('query_id',query_id)
-        print('content_id',content_id )
+        print('query_id',query_id) 
+        print('content_id',content_id ) 
         try:
             results = self.model.predict(feed)
             print('results',results)
-            print('wwww',results)
             print('start_logits', results.start_logits)
             print('end_logits', results.end_logits)
             processed_results = self.post_process(results, content_id)
-            print('processed_results',processed_results)
-            print('post_process',self.post_process)
+            print('processed_results',processed_results) 
             
+            if self.take_accuracy:
+                self.post_process(processed_results)
+
         except Exception as ex:  # pylint: disable=broad-except
             # src = [self.ds.get_item_loc(i) for i in content_id]
             src = ""
@@ -366,7 +379,7 @@ class RunnerBase:
         idx = [q.index for q in query_samples]
         query_id = [q.id for q in query_samples]
         if len(query_samples) < self.max_batchsize:
-            print('length of query_samples',len(query_samples))
+            #print('query_samples',query_samples)
             feed = self.ds.make_batch(self.model, idx)
             print('feed2',feed)
             self.run_one_item((query_id, idx, feed))
@@ -403,8 +416,13 @@ class QueueRunner(RunnerBase):
             self.run_one_item(qitem)
 
     def enqueue(self, query_samples):
+        # print('query_samples',query_samples)
+        # print('q_samples_id',query_samples.id)
+        # print('q_samples_index',query_samples.index)
         idx = [q.index for q in query_samples]
         query_id = [q.id for q in query_samples]
+        print('query_samples_idx',idx)
+        print('query_samples_query_id',query_id)
         if len(query_samples) < self.max_batchsize:
             # queue batch
             feed = self.ds.make_batch(self.model, idx)
@@ -882,10 +900,10 @@ def main():
         lg.TestScenario.Server: BatchingQueueRunner,
         lg.TestScenario.Offline: QueueRunner
     }
-    runner = runner_map[scenario](backend, ds, args.threads, post_proc=post_process, max_batchsize=args.batchsize)
+    runner = runner_map[scenario](backend, ds, args.threads, post_proc=post_process, max_batchsize=args.batchsize) 
 
     def issue_queries(query_samples):
-        runner.enqueue(query_samples)
+        runner.enqueue(query_samples) #what is issue_queries 
 
     def flush_queries():
         pass
@@ -962,9 +980,19 @@ def main():
     log.info("starting {}".format(scenario))
 
     start_time = time.time()
-    accuracy_runner = runner.start_run(args.accuracy)
+    accuracy_runner = runner.start_run(args.accuracy) #what should be available to me
     print('accuracy_runner',accuracy_runner)
-    lg.StartTestWithLogSettings(sut, qsl, settings, log_settings)
+    #addition
+    #bind a forward hook to log the output
+    #what does the hook need?
+    #the hook with need (backend.model, log_settings.log_output)
+    def log_model_output(module, input, output):
+        #to log output to log_settings.log_output.output_dir
+        print('loggging output')
+
+    backend.model.register_forward_hook(log_model_output)
+ 
+    lg.StartTestWithLogSettings(sut, qsl, settings, log_settings) 
     runner.finish()
     lg.DestroyQSL(qsl)
     lg.DestroySUT(sut)
