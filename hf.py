@@ -903,7 +903,7 @@ def main():
     runner = runner_map[scenario](backend, ds, args.threads, post_proc=post_process, max_batchsize=args.batchsize) 
 
     def issue_queries(query_samples):
-        runner.enqueue(query_samples) #what is issue_queries 
+        runner.enqueue(query_samples) 
 
     def flush_queries():
         pass
@@ -974,20 +974,22 @@ def main():
         settings.single_stream_target_latency_percentile = percentile
         settings.server_target_latency_percentile = percentile
 
-    sut = lg.ConstructSUT(issue_queries, flush_queries)
-    qsl = lg.ConstructQSL(count, count, ds.load_query_samples, ds.unload_query_samples)
+    sut = lg.ConstructSUT(issue_queries, flush_queries) 
+    qsl = lg.ConstructQSL(count, count, ds.load_query_samples, ds.unload_query_samples)  
 
     log.info("starting {}".format(scenario))
 
     start_time = time.time()
-    accuracy_runner = runner.start_run(args.accuracy) #what should be available to me
+    accuracy_runner = runner.start_run(args.accuracy) 
     print('accuracy_runner',accuracy_runner)
-    #addition
     #bind a forward hook to log the output
     #what does the hook need?
     #the hook with need (backend.model, log_settings.log_output)
     def log_model_output(module, input, output):
+        xxx,yyy = input
+        output = log_settings.log_output
         #to log output to log_settings.log_output.output_dir
+
         print('loggging output')
 
     backend.model.register_forward_hook(log_model_output)
