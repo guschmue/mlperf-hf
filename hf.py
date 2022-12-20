@@ -25,7 +25,7 @@ import torch
 import transformers
 import onnxruntime as ort
 from datasets import load_dataset
-
+global arr
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("main")
@@ -345,8 +345,8 @@ class RunnerBase:
             processed_results = self.post_process(results, content_id)
             # print('processed_results',processed_results) 
             
-            if self.take_accuracy:
-                self.post_process(processed_results)
+            # if self.take_accuracy:
+            #     self.post_process(processed_results)
 
         except Exception as ex:  # pylint: disable=broad-except
             # src = [self.ds.get_item_loc(i) for i in content_id]
@@ -759,9 +759,9 @@ class SquadDataSet(DataSet):
         #TODO:Implement Accuracy
         output_dir = '/homes/wyazar/mlperf_loadgen/mlperf-hf/results/bert-base-uncased/pytorch/SingleStream/accuracy/tensor.pt'
         if os.path.exists(output_dir):
-            print(output_dir)
+            print("found output_dir: ", output_dir)
         else:
-            print(output_dir, "not found")
+            print("not found", output_dir)
         
 
 class WikiTextDataSet(DataSet):
@@ -985,8 +985,6 @@ def main():
     #what does the hook need?
     #the hook will need (backend.model, log_settings.log_output)
     
-    
-    global arr
     arr = []
     def log_model_output(module, _input, _output):
         #to log output to log_settings.log_output.output_dir
@@ -994,14 +992,10 @@ def main():
         torch.save(_output,log_settings.log_output.outdir + '/tensor.pt')
         arr_len = len(arr)
         print('Itreations', arr_len, ': save the output to log_settings.log_output.outdir ')
-        arr.append(_output)
+        arr.append(_output) 
     
-    backend.model.register_forward_hook(log_model_output)
+    backend.model.register_forward_hook(log_model_output) 
     
-
-    
-
-
     #figure out a way to logging everything not just over writing
     #take that everything, turn this into accuracy mode
 
