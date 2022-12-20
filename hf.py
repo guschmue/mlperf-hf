@@ -980,19 +980,23 @@ def main():
     log.info("starting {}".format(scenario))
 
     start_time = time.time()
-    accuracy_runner = runner.start_run(args.accuracy) 
-    print('accuracy_runner',accuracy_runner)
+    accuracy_runner = runner.start_run(args.accuracy)  
     #bind a forward hook to log the output
     #what does the hook need?
     #the hook with need (backend.model, log_settings.log_output)
-    def log_model_output(module, input, output):
-        xxx,yyy = input
-        output = log_settings.log_output
+    def log_model_output(module, forward_hook_input, output):
         #to log output to log_settings.log_output.output_dir
+        #print('loggging output')
+        tokenizer  = forward_hook_input
+        log_settings.log_output  = output
+       
+    modules = backend.model.named_children()
+    print('modules',modules)
+    for name, module in modules:
+        module.register_forward_hook(log_model_output)
 
-        print('loggging output')
+    #backend.model.register_forward_hook(log_model_output)
 
-    backend.model.register_forward_hook(log_model_output)
  
     lg.StartTestWithLogSettings(sut, qsl, settings, log_settings) 
     runner.finish()
