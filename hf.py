@@ -234,7 +234,7 @@ class BackendOnnxruntime(Backend):
         return "np"
 
     def predict(self, feed):
-        # print(feed)
+
         if self.generative:
             ret = self.model.generate(**feed, num_beams=4, no_repeat_ngram_size=2, min_length=30, max_length=100, early_stopping=True)
         else:
@@ -270,7 +270,7 @@ class BackendPytorch(Backend):
         return "pt"
 
     def predict(self, feed):
-        # print(feed)
+
         if self.generative:
             ret = self.model.generate(**feed, num_beams=4, no_repeat_ngram_size=2, min_length=30, max_length=100, early_stopping=True)
         else:
@@ -335,18 +335,10 @@ class RunnerBase:
         # run the prediction
         processed_results = []
         query_id, content_id, feed = qitem 
-        # print('query_id',query_id) 
-        # print('content_id',content_id ) 
         try:
             results = self.model.predict(feed)
-            # print('results',results)
-            # print('start_logits', results.start_logits)
-            # print('end_logits', results.end_logits)
+
             processed_results = self.post_process(results, content_id)
-            # print('processed_results',processed_results) 
-            
-            # if self.take_accuracy:
-            #     self.post_process(processed_results)
 
         except Exception as ex:  # pylint: disable=broad-except
             # src = [self.ds.get_item_loc(i) for i in content_id]
@@ -361,24 +353,19 @@ class RunnerBase:
             response = []
             for idx, qid in enumerate(query_id):
                 response_array = array.array("B", np.array(processed_results[idx], np.float32).tobytes())
-                # print('response_array',response_array)
                 response_array_refs.append(response_array)
-                # print('response_array_refs',response_array_refs)
+
                 bi = response_array.buffer_info()
-                # print('byte',bi)
-                # print('byte0',bi[0])
-                # print('byte1',bi[1])
                 response.append(lg.QuerySampleResponse(qid, bi[0], bi[1]))
-                # print('response',response)
             lg.QuerySamplesComplete(response)
 
     def enqueue(self, query_samples):
         idx = [q.index for q in query_samples]
         query_id = [q.id for q in query_samples]
         if len(query_samples) < self.max_batchsize:
-            #print('query_samples',query_samples)
+
             feed = self.ds.make_batch(self.model, idx)
-            # print('feed2',feed)
+
             self.run_one_item((query_id, idx, feed))
         else:
             bs = self.max_batchsize
@@ -415,8 +402,7 @@ class QueueRunner(RunnerBase):
     def enqueue(self, query_samples):
         idx = [q.index for q in query_samples]
         query_id = [q.id for q in query_samples]
-        # print('query_samples_idx',idx)
-        # print('query_samples_query_id',query_id)
+
         if len(query_samples) < self.max_batchsize:
             # queue batch
             feed = self.ds.make_batch(self.model, idx)
@@ -981,14 +967,11 @@ def main():
 
     start_time = time.time()
     accuracy_runner = runner.start_run(args.accuracy)  
-    #bind a forward hook to log the output
-    #what does the hook need?
-    #the hook will need (backend.model, log_settings.log_output)
+
     
     arr = []
     def log_model_output(module, _input, _output):
-        #to log output to log_settings.log_output.output_dir
-        #breakpoint()
+
         torch.save(_output,log_settings.log_output.outdir + '/tensor.pt')
         arr_len = len(arr)
         print('Itreations', arr_len, ': save the output to log_settings.log_output.outdir ')
@@ -996,8 +979,6 @@ def main():
     
     backend.model.register_forward_hook(log_model_output) 
     
-    #figure out a way to logging everything not just over writing
-    #take that everything, turn this into accuracy mode
 
  
     lg.StartTestWithLogSettings(sut, qsl, settings, log_settings) 
@@ -1008,7 +989,6 @@ def main():
 
     if args.accuracy:
         acc_result = ds.accuracy(output_dir)
-        breakpoint()
     else:
         acc_result = None
 
