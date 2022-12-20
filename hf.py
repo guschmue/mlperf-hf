@@ -25,7 +25,7 @@ import torch
 import transformers
 import onnxruntime as ort
 from datasets import load_dataset
-
+global arr
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("main")
@@ -111,6 +111,15 @@ def get_args():
 
     return args
 
+
+
+# #dummy implementation of post process, nothing useful is returning
+# def post_proces(self,query_ids,results):
+#     response = []
+#     for res, q_id in zip(results,query_ids):
+#         response.append(lg.QuerySampleResponse(q_id,0,0))
+    
+#     lg.QuerySamplesComplete(response)
 
 class PostProcessNone:
     def __init__(self, offset=0):
@@ -310,6 +319,7 @@ class RunnerBase:
     def __init__(self, model, ds, threads, post_proc=None, max_batchsize=128):
         self.ds = ds
         self.model = model
+        self.take_accuracy = False
         self.post_process = post_proc
         self.threads = threads
         self.max_batchsize = max_batchsize
@@ -324,10 +334,20 @@ class RunnerBase:
     def run_one_item(self, qitem):
         # run the prediction
         processed_results = []
-        query_id, content_id, feed = qitem
+        query_id, content_id, feed = qitem 
+        # print('query_id',query_id) 
+        # print('content_id',content_id ) 
         try:
             results = self.model.predict(feed)
+            # print('results',results)
+            # print('start_logits', results.start_logits)
+            # print('end_logits', results.end_logits)
             processed_results = self.post_process(results, content_id)
+            # print('processed_results',processed_results) 
+            
+            # if self.take_accuracy:
+            #     self.post_process(processed_results)
+
         except Exception as ex:  # pylint: disable=broad-except
             # src = [self.ds.get_item_loc(i) for i in content_id]
             src = ""
@@ -341,16 +361,24 @@ class RunnerBase:
             response = []
             for idx, qid in enumerate(query_id):
                 response_array = array.array("B", np.array(processed_results[idx], np.float32).tobytes())
+                # print('response_array',response_array)
                 response_array_refs.append(response_array)
+                # print('response_array_refs',response_array_refs)
                 bi = response_array.buffer_info()
+                # print('byte',bi)
+                # print('byte0',bi[0])
+                # print('byte1',bi[1])
                 response.append(lg.QuerySampleResponse(qid, bi[0], bi[1]))
+                # print('response',response)
             lg.QuerySamplesComplete(response)
 
     def enqueue(self, query_samples):
         idx = [q.index for q in query_samples]
         query_id = [q.id for q in query_samples]
         if len(query_samples) < self.max_batchsize:
+            #print('query_samples',query_samples)
             feed = self.ds.make_batch(self.model, idx)
+            # print('feed2',feed)
             self.run_one_item((query_id, idx, feed))
         else:
             bs = self.max_batchsize
@@ -387,6 +415,8 @@ class QueueRunner(RunnerBase):
     def enqueue(self, query_samples):
         idx = [q.index for q in query_samples]
         query_id = [q.id for q in query_samples]
+        # print('query_samples_idx',idx)
+        # print('query_samples_query_id',query_id)
         if len(query_samples) < self.max_batchsize:
             # queue batch
             feed = self.ds.make_batch(self.model, idx)
@@ -679,6 +709,10 @@ class DataSet:
 
     def get(self, idx):
         return self.samples[idx]
+    
+    def accuracy(self,output_dir: str):
+        raise NotImplementedError
+        
 
 
 class SquadDataSet(DataSet):
@@ -721,6 +755,14 @@ class SquadDataSet(DataSet):
             for i, idx in enumerate(sample_ids):
                 self.samples[idx] = {key: np.expand_dims(tokens[key][i], axis=0) for key in keys}
 
+    def accuracy(self,output_dir: str):
+        #TODO:Implement Accuracy
+        output_dir = '/homes/wyazar/mlperf_loadgen/mlperf-hf/results/bert-base-uncased/pytorch/SingleStream/accuracy/tensor.pt'
+        if os.path.exists(output_dir):
+            print("found output_dir: ", output_dir)
+        else:
+            print("not found", output_dir)
+        
 
 class WikiTextDataSet(DataSet):
     def __init__(self, backend, dataset_name, tokenizer, task, count):
@@ -857,10 +899,10 @@ def main():
         lg.TestScenario.Server: BatchingQueueRunner,
         lg.TestScenario.Offline: QueueRunner
     }
-    runner = runner_map[scenario](backend, ds, args.threads, post_proc=post_process, max_batchsize=args.batchsize)
+    runner = runner_map[scenario](backend, ds, args.threads, post_proc=post_process, max_batchsize=args.batchsize) 
 
     def issue_queries(query_samples):
-        runner.enqueue(query_samples)
+        runner.enqueue(query_samples) 
 
     def flush_queries():
         pass
@@ -868,6 +910,7 @@ def main():
     # warmup
     ds.load_query_samples([0])
     for _ in range(5):
+  
         feed = ds.make_batch(backend, [0])
         _ = backend.predict(feed)
 
@@ -931,14 +974,33 @@ def main():
         settings.single_stream_target_latency_percentile = percentile
         settings.server_target_latency_percentile = percentile
 
-    sut = lg.ConstructSUT(issue_queries, flush_queries)
-    qsl = lg.ConstructQSL(count, count, ds.load_query_samples, ds.unload_query_samples)
+    sut = lg.ConstructSUT(issue_queries, flush_queries) 
+    qsl = lg.ConstructQSL(count, count, ds.load_query_samples, ds.unload_query_samples)  
 
     log.info("starting {}".format(scenario))
 
     start_time = time.time()
-    runner.start_run(args.accuracy)
-    lg.StartTestWithLogSettings(sut, qsl, settings, log_settings)
+    accuracy_runner = runner.start_run(args.accuracy)  
+    #bind a forward hook to log the output
+    #what does the hook need?
+    #the hook will need (backend.model, log_settings.log_output)
+    
+    arr = []
+    def log_model_output(module, _input, _output):
+        #to log output to log_settings.log_output.output_dir
+        #breakpoint()
+        torch.save(_output,log_settings.log_output.outdir + '/tensor.pt')
+        arr_len = len(arr)
+        print('Itreations', arr_len, ': save the output to log_settings.log_output.outdir ')
+        arr.append(_output) 
+    
+    backend.model.register_forward_hook(log_model_output) 
+    
+    #figure out a way to logging everything not just over writing
+    #take that everything, turn this into accuracy mode
+
+ 
+    lg.StartTestWithLogSettings(sut, qsl, settings, log_settings) 
     runner.finish()
     lg.DestroyQSL(qsl)
     lg.DestroySUT(sut)
@@ -946,6 +1008,7 @@ def main():
 
     if args.accuracy:
         acc_result = ds.accuracy(output_dir)
+        breakpoint()
     else:
         acc_result = None
 
